@@ -22,6 +22,7 @@ uv run pytest                        # loader tests (synthetic fixture; see belo
 NASS_API_KEY=... uv run ingest/fetch.py cattle   # NASS county cattle (free key)
 uv run ingest/load_cattle.py         # load county cattle inventory
 uv run ingest/load_facilities.py     # load Texas FSIS cattle slaughter establishments (staging)
+uv run ingest/make_report.py         # write REPORT.md from the published views
 uv run ingest/export_geojson.py      # write map/data/texas_counties.geojson
 open map/index.html                  # view the static map
 ```
@@ -53,4 +54,4 @@ validation queries against real Texas data.
 
 ## Status
 
-Steps 0 to 5 written and tested. Steps 1 to 3 loaded on the real data. Steps 4 and 5 (metrics and clusters) need to run on your machine.
+Steps 0 to 6 written and tested. Steps 1 to 3 loaded on the real data; steps 4 to 6 run on your machine. Remaining: GeoJSON export and static map (Step 7).

@@ -71,3 +71,12 @@ disease to any facility, or identify outbreak zones.
   clusters by membership, not by ID.
 - **Publication threshold.** A cluster is shown only when at least 5 distinct cattle
   plants lie within 25 km of its member counties. Smaller clusters are withheld.
+
+## Rankings (Step 6)
+- **Two separate ranks, not one score.** Cattle rank measures inventory. Facility
+  proximity rank measures nearby slaughter plants. Neither is a risk measure, and they
+  should not be combined.
+- **Withheld counties have no rank.** A county with a withheld value is never placed
+  in a ranking, so a missing rank does not mean a low value.
+- **Ties.** Counties with equal plant counts are ordered by nearest distance. Equal
+  values still share a rank, so rank order can skip numbers.
