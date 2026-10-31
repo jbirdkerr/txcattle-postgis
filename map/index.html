@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Texas cattle slaughter capacity by county (descriptive)</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+  html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
+  #map { position: absolute; inset: 0; background: #f4f4f1; }
+  #panel {
+    position: absolute; top: 12px; left: 12px; width: 280px; background: #fff;
+    padding: 12px 14px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.25);
+    font-size: 13px; line-height: 1.4;
+  }
+  #panel h1 { font-size: 15px; margin: 0 0 6px; }
+  #panel select { width: 100%; margin: 4px 0 10px; padding: 4px; }
+  .legend-row { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
+  .swatch { width: 16px; height: 12px; border: 1px solid #999; display: inline-block; }
+  .note { color: #555; font-size: 12px; margin-top: 10px; }
+  .maplibregl-popup-content { font-size: 13px; line-height: 1.4; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="panel">
+  <h1>Texas counties: cattle slaughter capacity</h1>
+  <label>Show
+    <select id="metric">
+      <option value="all_cattle_head">All cattle inventory (latest NASS survey)</option>
+      <option value="cattle_within_25km">Cattle slaughter plants within 25 km</option>
+      <option value="nearest_cattle_km">Distance to nearest cattle slaughter plant (km)</option>
+      <option value="cluster_id">Descriptive clusters</option>
+    </select>
+  </label>
+  <div id="legend"></div>
+  <div class="note">
+    Descriptive only. Shows where facilities and reported cattle are located. It does not
+    show causes or attribute disease to any facility. Grey counties have withheld values:
+    small facility counts (1 to 4) or suppressed NASS estimates. Withheld is not zero.
+  </div>
+</div>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+const WITHHELD = "#c9c9c9";
+const PALETTE = ["#fee5d9", "#fcae91", "#fb6a4a", "#de2d26", "#a50f15"];
+const CLUSTER_COLORS = ["#1f78b4", "#33a02c", "#ff7f00", "#6a3d9a", "#b15928"];
+
+const metricSelect = document.getElementById("metric");
+const legend = document.getElementById("legend");
+
+const map = new maplibregl.Map({
+  container: "map",
+  style: { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": "#f4f4f1" } }] },
+  center: [-99.5, 31.2],
+  zoom: 5.2,
+});
+map.addControl(new maplibregl.NavigationControl(), "top-right");
+
+const isNum = (p, key) => typeof p[key] === "number";
+
+// Quantile breaks from the data, so each class holds a similar number of counties.
+function quantileBreaks(values, n) {
+  const v = values.slice().sort((a, b) => a - b);
+  const out = [];
+  for (let i = 1; i < n; i++) out.push(v[Math.floor((i * v.length) / n)]);
+  return [...new Set(out)];
+}
+
+function colorExpression(metric, data) {
+  const values = data.features.map(f => f.properties[metric]).filter(x => typeof x === "number");
+  if (metric === "cluster_id") {
+    const ids = [...new Set(values)].sort((a, b) => a - b);
+    const expr = ["match", ["get", "cluster_id"]];
+    ids.forEach((id, i) => expr.push(id, CLUSTER_COLORS[i % CLUSTER_COLORS.length]));
+    expr.push("#e6e6e6");   // unclustered
+    return expr;
+  }
+  const breaks = quantileBreaks(values, PALETTE.length);
+  const expr = ["step", ["get", metric], PALETTE[0]];
+  breaks.forEach((b, i) => expr.push(b, PALETTE[i + 1] || PALETTE[PALETTE.length - 1]));
+  return ["case", ["!=", ["typeof", ["get", metric]], "number"], WITHHELD, expr];
+}
+
+function renderLegend(metric, data) {
+  const rows = [];
+  if (metric === "cluster_id") {
+    const ids = [...new Set(data.features.map(f => f.properties.cluster_id).filter(x => typeof x === "number"))].sort((a, b) => a - b);
+    ids.forEach((id, i) => rows.push([CLUSTER_COLORS[i % CLUSTER_COLORS.length], `Cluster ${id} (descriptive grouping)`]));
+    rows.push(["#e6e6e6", "Not in a published cluster"]);
+  } else {
+    const values = data.features.map(f => f.properties[metric]).filter(x => typeof x === "number");
+    const breaks = quantileBreaks(values, PALETTE.length);
+    const labels = [`0 to ${breaks[0]}`];
+    for (let i = 0; i < breaks.length; i++) {
+      labels.push(i + 1 < breaks.length ? `${breaks[i]} to ${breaks[i + 1]}` : `${breaks[i]} and above`);
+    }
+    PALETTE.forEach((c, i) => rows.push([c, labels[i]]));
+  }
+  rows.push([WITHHELD, "Withheld (small count or suppressed)"]);
+  legend.innerHTML = rows.map(([c, t]) =>
+    `<div class="legend-row"><span class="swatch" style="background:${c}"></span>${t}</div>`
+  ).join("");
+}
+
+function describe(p) {
+  const show = (v, unit = "") => (v === null || v === undefined) ? "withheld" : `${v.toLocaleString()}${unit}`;
+  const status = p.all_cattle_status ? ` (${p.all_cattle_status})` : "";
+  return `
+    <strong>${p.name} County</strong><br>
+    All cattle: ${show(p.all_cattle_head)}${status}<br>
+    Cattle plants within 25 km: ${show(p.cattle_within_25km)}<br>
+    Nearest cattle plant: ${show(p.nearest_cattle_km, " km")}<br>
+    Dairy cow plants within 25 km: ${show(p.dairy_cow_within_25km)}<br>
+    Cluster: ${p.cluster_id === null || p.cluster_id === undefined ? "none published" : p.cluster_id}
+  `;
+}
+
+function applyMetric(metric) {
+  map.setPaintProperty("counties", "fill-color", colorExpression(metric, window.countyData));
+  renderLegend(metric, window.countyData);
+}
+
+map.on("load", async () => {
+  const resp = await fetch("data/texas_counties.geojson");
+  if (!resp.ok) throw new Error("Could not load data/texas_counties.geojson. Run the export first, and serve this folder over HTTP.");
+  window.countyData = await resp.json();
+
+  map.addSource("counties", { type: "geojson", data: window.countyData });
+  map.addLayer({ id: "counties", type: "fill", source: "counties",
+                 paint: { "fill-color": WITHHELD, "fill-opacity": 0.85 } });
+  map.addLayer({ id: "outline", type: "line", source: "counties",
+                 paint: { "line-color": "#555", "line-width": 0.4 } });
+
+  const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
+  map.on("mousemove", "counties", e => {
+    map.getCanvas().style.cursor = "pointer";
+    popup.setLngLat(e.lngLat).setHTML(describe(e.features[0].properties)).addTo(map);
+  });
+  map.on("mouseleave", "counties", () => {
+    map.getCanvas().style.cursor = "";
+    popup.remove();
+  });
+
+  metricSelect.addEventListener("change", () => applyMetric(metricSelect.value));
+  applyMetric(metricSelect.value);
+});
+</script>
+</body>
+</html>
