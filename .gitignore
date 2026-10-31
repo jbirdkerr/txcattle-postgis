@@ -1,0 +1,16 @@
+# Raw and staging data (large files; facility points stay out of git)
+data/raw/
+data/staging/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+
+# Generated test fixtures (synthetic, rebuilt by tests/make_fixture.py)
+tests/fixtures/

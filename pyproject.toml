@@ -1,0 +1,17 @@
+[project]
+name = "txcattle-postgis"
+version = "0.1.0"
+description = "County-level Texas cattle, beef, and dairy facility proximity analysis with PostGIS"
+requires-python = ">=3.11"
+dependencies = [
+    "psycopg[binary]>=3.1",
+    "requests>=2.31",
+    "pyshp>=2.3",
+    "shapely>=2.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = false
