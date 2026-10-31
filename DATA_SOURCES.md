@@ -19,26 +19,35 @@ and verification status. Status values:
 - **Expected file:** `tl_2025_us_county.zip` (filter to state FIPS 48). Filename to confirm at download.
 - **Status:** Verified for vintage and release date. Filename to verify.
 
-### 2. NASS county livestock estimates (annual) and 2022 Census of Agriculture
+### 2. NASS county cattle inventory (Quick Stats API)
 
-- **Used for:** cattle inventory as the denominator for county-level rates.
+- **Used for:** county cattle inventory as the denominator for rates, split into all cattle, beef cows, and milk cows where NASS publishes the class.
 - **Publisher:** USDA National Agricultural Statistics Service (NASS).
-- **Source pages:**
-  - 2022 Census of Agriculture, Texas county data: https://www.nass.usda.gov/Publications/AgCensus/2022/Full_Report/Volume_1,_Chapter_2_County_Level/Texas/
-  - NASS county estimates, Texas: https://data.nass.usda.gov/Statistics_by_State/Texas/Publications/County_Estimates/
-- **Vintage:** 2022 Census of Agriculture (issued February 2024); county estimates 2021 to 2023.
+- **Source:** Quick Stats API, https://quickstats.nass.usda.gov/api (free key required).
+- **Queries** (see `ingest/fetch.py`): `commodity_desc=CATTLE`, `statisticcat_desc=INVENTORY`, `agg_level_desc=COUNTY`, `state_alpha=TX`. Census: `source_desc=CENSUS, year=2022`. Survey: `source_desc=SURVEY, year__GE=2021`.
+- **Vintage:** 2022 Census of Agriculture (issued February 2024); annual county estimates 2021 onward. Each download records its retrieval timestamp and the exact query in the JSON envelope.
 - **License:** U.S. government work, public domain. Cite NASS as the source.
-- **Status:** Verified that county tables exist for Texas (2022 Census and annual county estimates). Downloadable structured format (CSV or Quick Stats export) to verify before ingestion. Published PDFs will not be used for loading.
+- **Caveats:**
+  - County survey estimates are developed from Census data, administrative records, and state-level estimates, so they are modeled values, not counts.
+  - Suppressed cells are published with markers such as `(D)` to protect confidentiality. Loaded as NULL with the marker recorded.
+  - NASS announced discontinuation of some data programs in August 2025. Confirm the county cattle series continues for the most recent years before relying on them.
+- **Status:** Endpoint and parameter names confirmed against NASS API documentation and published client libraries. Field names (`Value` / `value`) observed in published examples. Class names (`class_desc`) and recent-year coverage are checked on first load and recorded in the loader output.
 
-### 3. FSIS Meat, Poultry, and Egg Product Inspection (MPI) Directory
+### 3. FSIS Meat, Poultry, and Egg Product Inspection (MPI) Directory and Establishment Demographic supplement
 
-- **Used for:** meat and poultry slaughter and processing establishments, filtered to cattle-relevant establishments. Establishment addresses are geocoded in staging; only county-level aggregates are published.
+- **Used for:** Texas meat and poultry establishments, filtered to those that slaughter cattle. The `dairy_cow_slaughter` flag identifies plants that slaughter dairy cows. This is not a dairy processor list (FSIS does not cover dairy processing).
 - **Publisher:** USDA Food Safety and Inspection Service (FSIS).
 - **Source page:** https://www.fsis.usda.gov/inspection/establishments/meat-poultry-and-egg-product-inspection-directory
-- **Vintage:** CSV version dated January 21, 2025 on the page at time of research; catalog record says updated weekly. Re-download at ingest time and record the download date.
+- **Files:** `fsis_mpi_directory.csv` (locations, FIPS codes) and `fsis_mpi_supplement.csv` (species slaughtered). Joined on `establishment_id`.
+- **Retrieved:** 2026-10-31. SHA-256:
+  - directory: `76f56c74e2f2caa1b1a392cca19a82a0d310e210d57d84ab8a91991a2a439a20`
+  - supplement: `57cd2fd313b75edaa2314b1635e7df96421066fe6cdb0c161d4f73696e752328`
 - **License:** U.S. government work, public domain.
-- **Caveats:** FSIS lists physical addresses, not coordinates. It covers meat and poultry, not dairy processing. Cattle-relevant filtering depends on species fields in the directory or demographic supplement, to verify.
-- **Status:** Verified that a public CSV exists. Species fields and geocoding approach to verify.
+- **Caveats:**
+  - The supplement's slaughter fields include a 360-day lookback, so they reflect recent activity rather than the current license status.
+  - Coordinates are as published. The loader rejects points outside Texas and checks each point's county against the FSIS FIPS code.
+  - Facility points are staging data. Only county-level aggregates are published.
+- **Status:** Verified. Column names confirmed from the downloaded headers. Cattle flag values are checked by the loader, which stops on any unrecognized value.
 
 ### 4. USDA APHIS HPAI confirmed cases in livestock (state level)
 

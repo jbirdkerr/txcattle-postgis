@@ -19,8 +19,9 @@ uv sync                              # install Python ingestion dependencies
 uv run ingest/fetch.py counties      # download TIGER 2025 counties to data/raw/
 uv run ingest/load_counties.py       # load Texas county boundaries
 uv run pytest                        # loader tests (synthetic fixture; see below)
-uv run ingest/load_cattle.py         # load county cattle inventory (NASS)
-uv run ingest/load_facilities.py     # load and geocode FSIS establishments (staging)
+NASS_API_KEY=... uv run ingest/fetch.py cattle   # NASS county cattle (free key)
+uv run ingest/load_cattle.py         # load county cattle inventory
+uv run ingest/load_facilities.py     # load Texas FSIS cattle slaughter establishments (staging)
 uv run ingest/export_geojson.py      # write map/data/texas_counties.geojson
 open map/index.html                  # view the static map
 ```
@@ -52,4 +53,4 @@ validation queries against real Texas data.
 
 ## Status
 
-Step 1 (counties): loader and validation written and tested on a synthetic fixture. Real TIGER load and validation pending.
+Steps 0 to 4 written and tested. Steps 1 to 3 loaded on the real data. Step 4 (county metrics) needs to run on your machine.

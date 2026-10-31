@@ -22,6 +22,7 @@ FROM tx_county a
 JOIN tx_county b ON a.geoid < b.geoid
 WHERE ST_Area(ST_Intersection(a.geom, b.geom)) > 1e-9;
 
--- Expect: total land area near the published Texas figure (about 676,587 km2
--- land, 2025 TIGER ALAND). Large deviations mean a missing or duplicated county.
+-- Expect: equal to the Texas STATE ALAND in the 2025 TIGER state file, since
+-- county ALAND values sum to the state total. Compare against the state file
+-- (tl_2025_us_state.zip, STATEFP 48) rather than a figure from memory.
 SELECT round(sum(land_area_m2) / 1e6) AS texas_land_km2 FROM tx_county;
