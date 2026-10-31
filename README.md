@@ -53,4 +53,4 @@ validation queries against real Texas data.
 
 ## Status
 
-Steps 0 to 4 written and tested. Steps 1 to 3 loaded on the real data. Step 4 (county metrics) needs to run on your machine.
+Steps 0 to 5 written and tested. Steps 1 to 3 loaded on the real data. Steps 4 and 5 (metrics and clusters) need to run on your machine.

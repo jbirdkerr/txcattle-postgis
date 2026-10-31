@@ -59,3 +59,15 @@ disease to any facility, or identify outbreak zones.
 - Whether any facility, county, or cattle population is related to any disease outcome.
 - Movement of animals between counties, or the facility they were sent to.
 - Premises-level animal health. Premises data is not public.
+
+## Clustering (Step 5)
+- **Descriptive only.** Clusters group counties that sit close to cattle slaughter
+  capacity. They do not measure disease, and they are not outbreak zones.
+- **Input is facility density.** Clustering uses counties with a slaughter plant within
+  25 km. The county disease data is too thin to cluster, so disease is not an input.
+- **Parameters are judgment calls.** A 50 km neighbourhood and a minimum of two counties
+  are stored in `cluster_params`. Changing them changes the clusters, so report them.
+- **Labels are arbitrary.** Cluster IDs can change when the input changes. Compare
+  clusters by membership, not by ID.
+- **Publication threshold.** A cluster is shown only when at least 5 distinct cattle
+  plants lie within 25 km of its member counties. Smaller clusters are withheld.
