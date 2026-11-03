@@ -1,6 +1,7 @@
 # Raw and staging data (large files; facility points stay out of git)
 data/raw/
 data/staging/
+.env
 
 # Python
 .venv/
@@ -14,4 +15,3 @@ __pycache__/
 
 # Generated test fixtures (synthetic, rebuilt by tests/make_fixture.py)
 tests/fixtures/
-.env
