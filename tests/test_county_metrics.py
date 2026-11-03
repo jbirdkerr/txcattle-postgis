@@ -1,8 +1,8 @@
 """Tests for county facility metrics using SYNTHETIC counties and SYNTHETIC facility points.
 
-Synthetic county 48001 has its internal point at (-97.5, 30.5). Facilities are placed
-at known distances north and south of that point. 1 degree of latitude is about
-111.2 km, so 0.0899 deg is about 10.0 km and 0.18 deg is about 20.0 km.
+Distances are from the county BOUNDARY, in miles (migration 012). Synthetic county 48001
+spans lat 30 to 31, lon -98 to -97. Facilities placed north of its top edge (lat 31) are
+at known distances. 0.1 deg of latitude is about 11.0 km, or 6.8 miles.
 """
 
 from __future__ import annotations
@@ -24,12 +24,20 @@ TEST_DSN = os.environ.get(
     "TEST_DATABASE_URL", "postgresql://txcattle:txcattle@localhost:5432/txcattle_test"
 )
 MIGRATIONS = ROOT / "migrations"
+MIGRATION_ORDER = [
+    "002_counties.sql", "003_nass_cattle.sql", "004_cattle_views.sql",
+    "005_fsis_facilities.sql", "006_county_facility_metrics.sql",
+    "007_published_distance_rule.sql", "008_county_clusters.sql",
+    "009_county_summary.sql", "010_show_small_counts.sql", "011_boundary_distance.sql", "012_miles.sql",
+]
 
-# (id, lat, lon, cattle, dairy_cow). Coordinates chosen relative to 48001's internal point.
+# (id, lat, lon, cattle, dairy_cow). All sit north of 48001's top edge (lat 31).
+# At 31 deg N one degree of latitude is about 110.9 km, so 0.1 deg is ~11.0 km (6.8 mi).
+# Rings: 10 miles = 16.09 km, 25 miles = 40.23 km.
 FACILITIES = [
-    ("P1", 30.5 + 0.0899, -97.5, True, False),   # ~10.0 km north, cattle only
-    ("P2", 30.5 - 0.25, -97.5, True, False),     # ~27.8 km south, cattle only (outside 25 km)
-    ("P3", 30.5 + 0.18, -97.5, True, True),      # ~20.0 km north, cattle and dairy cow
+    ("Q1", 31.0 + 0.10, -97.5, True, False),   # ~11.0 km = 6.8 mi: inside 10 mi
+    ("Q2", 31.0 + 0.25, -97.5, True, False),   # ~27.7 km = 17.2 mi: inside 25 mi
+    ("Q3", 31.0 + 0.18, -97.5, True, True),    # ~19.9 km = 12.3 mi: cattle and dairy cow
 ]
 
 
@@ -39,9 +47,7 @@ def db():
     with psycopg.connect(TEST_DSN, autocommit=True) as conn:
         conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
         conn.execute("CREATE EXTENSION postgis;")
-        for name in ("002_counties.sql", "003_nass_cattle.sql", "004_cattle_views.sql",
-                     "005_fsis_facilities.sql", "006_county_facility_metrics.sql",
-                     "007_published_distance_rule.sql"):
+        for name in MIGRATION_ORDER:
             conn.execute((MIGRATIONS / name).read_text())
     lcty.load(lcty.read_texas_counties(county_zip), TEST_DSN)
     with psycopg.connect(TEST_DSN, autocommit=True) as conn:
@@ -60,28 +66,49 @@ def db():
 
 def metrics(conn, geoid):
     return conn.execute(
-        """SELECT nearest_cattle_km, cattle_within_10km, cattle_within_25km,
-                  nearest_dairy_cow_km, dairy_cow_within_25km
+        """SELECT nearest_cattle_mi, cattle_within_10mi, cattle_within_25mi,
+                  nearest_dairy_cow_mi, dairy_cow_within_25mi, nearest_cattle_mi_centre
            FROM county_facility_metrics WHERE geoid = %s""",
         (geoid,),
     ).fetchone()
 
 
-def test_nearest_cattle_distance_is_about_10_km(db):
+def test_nearest_cattle_distance_is_boundary_distance(db):
     nearest, *_ = metrics(db, "48001")
-    assert 9.9 < nearest < 10.1
+    assert 6.7 < nearest < 6.9
 
 
-def test_radius_counts(db):
-    _, within10, within25, _, _ = metrics(db, "48001")
-    assert within10 == 1          # P1 only
-    assert within25 == 2          # P1 and P3; P2 at ~27.8 km is outside
+def test_radius_counts_use_boundary_distance(db):
+    _, within10, within25, _, _, _ = metrics(db, "48001")
+    assert within10 == 1          # Q1 at ~6.8 miles is inside 10 miles
+    assert within25 == 3          # Q1, Q2 (~17.2 miles) and Q3 (~12.3 miles)
 
 
 def test_dairy_cow_distance_and_count(db):
-    _, _, _, nearest_dairy, dairy25 = metrics(db, "48001")
-    assert 19.9 < nearest_dairy < 20.1   # P3, the only dairy cow plant
+    _, _, _, nearest_dairy, dairy25, _ = metrics(db, "48001")
+    assert 12.2 < nearest_dairy < 12.4   # Q3, the only dairy cow plant
     assert dairy25 == 1
+
+
+def test_centre_distance_kept_as_reference(db):
+    *_, centre = metrics(db, "48001")
+    # Internal point (-97.5, 30.5) to Q1 (31.1): about 41.4 miles.
+    assert 41.2 < centre < 41.7
+
+
+def test_plant_inside_county_has_zero_boundary_distance(db):
+    db.execute(
+        """INSERT INTO fsis_establishment
+           (establishment_id, establishment_number, name, geom, cattle_slaughter, dairy_cow_slaughter)
+           VALUES ('IN1', 'EIN1', 'SYNTH IN1',
+                   ST_SetSRID(ST_MakePoint(-97.5, 30.5), 4326)::geography, true, false)"""
+    )
+    try:
+        nearest, within10, *_ = metrics(db, "48001")
+        assert nearest == 0
+        assert within10 >= 1
+    finally:
+        db.execute("DELETE FROM fsis_establishment WHERE establishment_id = 'IN1'")
 
 
 def test_every_county_has_a_row(db):
@@ -89,40 +116,40 @@ def test_every_county_has_a_row(db):
     assert n == 3
 
 
-def test_county_with_no_facilities_in_radius_gets_zero_counts(db):
-    # County 48005 (synthetic, east) is about 100 km from the facilities: counts are 0, not NULL.
-    _, within10, within25, _, dairy25 = metrics(db, "48005")
+def test_county_far_from_facilities_gets_zero_counts(db):
+    # 48005 is about 90 miles east: no plants within 25 miles, so counts are 0, not NULL.
+    _, within10, within25, _, dairy25, _ = metrics(db, "48005")
     assert (within10, within25, dairy25) == (0, 0, 0)
 
 
-def test_published_view_withholds_counts_1_to_4(db):
+def test_published_view_shows_small_counts_with_flags(db):
     row = db.execute(
-        """SELECT cattle_within_10km, cattle_within_25km, dairy_cow_within_25km
+        """SELECT cattle_within_10mi, cattle_within_25mi, dairy_cow_within_25mi,
+                  cattle_10mi_small_count, cattle_25mi_small_count, dairy_25mi_small_count
            FROM county_facility_published WHERE geoid = '48001'"""
     ).fetchone()
-    # 10 km count is 1 (withheld); 25 km cattle count is 2 (withheld); dairy 25 km is 1 (withheld).
-    assert row == (None, None, None)
+    assert row == (1, 3, 1, True, True, True)
 
 
-def test_published_view_withholds_nearest_distance_with_small_counts(db):
-    """Option 1: nearest distance is withheld when the same type's 25 km count is 1 to 4."""
+def test_published_view_shows_distances(db):
     row = db.execute(
-        """SELECT nearest_cattle_km, nearest_dairy_cow_km
+        """SELECT nearest_cattle_mi, nearest_dairy_cow_mi, nearest_cattle_mi_centre
            FROM county_facility_published WHERE geoid = '48001'"""
     ).fetchone()
-    assert row == (None, None)
+    assert 6.7 < row[0] < 6.9
+    assert 12.2 < row[1] < 12.4
+    assert 41.2 < row[2] < 41.7
 
 
 def test_published_view_keeps_distance_when_no_plants_in_radius(db):
-    """County 48005 has 0 plants within 25 km, so its nearest distance does not locate a plant inside the radius."""
     row = db.execute(
-        """SELECT nearest_cattle_km FROM county_facility_published WHERE geoid = '48005'"""
+        """SELECT nearest_cattle_mi FROM county_facility_published WHERE geoid = '48005'"""
     ).fetchone()
-    assert row[0] is not None and row[0] > 25
+    assert row[0] is not None and row[0] > 25   # miles
 
 
 def test_published_view_keeps_zero(db):
     row = db.execute(
-        """SELECT cattle_within_10km FROM county_facility_published WHERE geoid = '48005'"""
+        """SELECT cattle_within_10mi FROM county_facility_published WHERE geoid = '48005'"""
     ).fetchone()
     assert row == (0,)

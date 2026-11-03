@@ -54,9 +54,9 @@ def main() -> None:
                    count(*) FILTER (WHERE milk_cow_status = 'no row')
             FROM county_cattle GROUP BY 1, 2 ORDER BY 1, 2""")
 
-        withheld_facility = fetch(conn, """
-            SELECT count(*) FILTER (WHERE cattle_within_25km IS NULL),
-                   count(*) FILTER (WHERE dairy_cow_within_25km IS NULL)
+        small_counts = fetch(conn, """
+            SELECT count(*) FILTER (WHERE cattle_25mi_small_count),
+                   count(*) FILTER (WHERE dairy_25mi_small_count)
             FROM county_facility_published""")[0]
 
         clusters = fetch(conn, """
@@ -70,12 +70,12 @@ def main() -> None:
             SELECT cattle_rank, name, all_cattle_head FROM county_summary
             WHERE cattle_rank IS NOT NULL ORDER BY cattle_rank LIMIT 10""")
         top_facility = fetch(conn, """
-            SELECT facility_proximity_rank, name, cattle_within_25km, nearest_cattle_km
+            SELECT facility_proximity_rank, name, cattle_within_25mi, nearest_cattle_mi
             FROM county_summary WHERE facility_proximity_rank IS NOT NULL
             ORDER BY facility_proximity_rank LIMIT 10""")
 
     cluster_lines = "\n".join(
-        f"- Cluster {cid}: {n_c} counties, {n_f} cattle plants within 25 km of its counties."
+        f"- Cluster {cid}: {n_c} counties, {n_f} cattle plants within 25 miles of its counties."
         for cid, n_c, n_f in clusters
     ) or "- No cluster met the publication threshold."
     member_lines = "\n".join(
@@ -106,9 +106,10 @@ and where NASS published no row, which is not treated as zero.
 
 ## Facility proximity
 
-Withheld under the small-count rule: {withheld_facility[0]} counties for cattle plant
-counts and {withheld_facility[1]} for dairy cow plant counts. Withheld counts are
-shown as "withheld", never as zero.
+Counts of 1 to 4 are shown and flagged as small counts, because they are unstable,
+not because they are confidential: the FSIS directory is public. There are
+{small_counts[0]} counties flagged for cattle plant counts and {small_counts[1]} for dairy
+cow plant counts. NASS suppressed values are shown as "withheld".
 
 ## Clusters
 
@@ -127,15 +128,18 @@ Two separate rankings. They measure different things and should not be combined.
 
 {table(["Rank", "County", "All cattle (head)"], top_cattle)}
 
-**Closest cattle slaughter capacity (most plants within 25 km, then nearest distance):**
+**Closest cattle slaughter capacity (most plants within 25 miles, then nearest distance):**
 
-{table(["Rank", "County", "Plants within 25 km", "Nearest plant (km)"], top_facility)}
+{table(["Rank", "County", "Plants within 25 miles", "Nearest plant to county boundary (miles)"], top_facility)}
+
+Distances are from the county boundary: 0 means a plant is inside the county.
 
 ## Limitations
 
 See `LIMITATIONS.md`. The most important points for reading this summary:
 
 - Facility counts and distances describe location, not activity or exposure.
+- Counts of 1 to 4 are flagged as small counts and can swing widely.
 - Inventories are modelled county estimates, not counts.
 - Dairy results rest on the small milk cow sample shown above.
 - Clusters are descriptive groupings with arbitrary labels.

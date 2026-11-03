@@ -1,8 +1,8 @@
 """Tests for county clustering using SYNTHETIC counties and SYNTHETIC facilities.
 
-Synthetic counties 48001 and 48003 have internal points about 97 km apart, so they
-cluster only when eps is raised above that distance. Facilities are placed relative
-to those points (1 degree of latitude is about 111.2 km).
+Synthetic counties 48001 and 48003 share an edge, so they cluster at any eps. Tests
+raise or lower eps in miles to exercise the threshold. Facilities are placed relative
+to those points (1 degree of latitude is about 111 km).
 """
 
 from __future__ import annotations
@@ -25,13 +25,13 @@ TEST_DSN = os.environ.get(
 )
 MIGRATIONS = ROOT / "migrations"
 
-# (id, lat, lon, cattle). 48001 internal point (-97.5, 30.5); 48003 (-96.5, 30.5).
+# (id, lat, lon, cattle). Synthetic plants placed inside 48001 and 48003 (distance 0 from boundary).
 FACILITIES = [
-    ("P1", 30.5 + 0.0899, -97.5, True),   # ~10 km from 48001
-    ("P3", 30.5 + 0.18,   -97.5, True),   # ~20 km from 48001
-    ("P4", 30.5 + 0.10,   -96.5, True),   # ~11 km from 48003
-    ("P5", 30.5 - 0.10,   -96.5, True),   # ~11 km from 48003
-    ("P6", 30.5 + 0.20,   -96.5, True),   # ~22 km from 48003
+    ("P1", 30.5 + 0.0899, -97.5, True),   # inside 48001
+    ("P3", 30.5 + 0.18,   -97.5, True),   # inside 48001
+    ("P4", 30.5 + 0.10,   -96.5, True),   # inside 48003
+    ("P5", 30.5 - 0.10,   -96.5, True),   # inside 48003
+    ("P6", 30.5 + 0.20,   -96.5, True),   # inside 48003
 ]
 
 
@@ -43,7 +43,9 @@ def db():
         conn.execute("CREATE EXTENSION postgis;")
         for name in ("002_counties.sql", "003_nass_cattle.sql", "004_cattle_views.sql",
                      "005_fsis_facilities.sql", "006_county_facility_metrics.sql",
-                     "007_published_distance_rule.sql", "008_county_clusters.sql"):
+                     "007_published_distance_rule.sql", "008_county_clusters.sql",
+                     "009_county_summary.sql", "010_show_small_counts.sql",
+                     "011_boundary_distance.sql", "012_miles.sql"):
             conn.execute((MIGRATIONS / name).read_text())
     lcty.load(lcty.read_texas_counties(county_zip), TEST_DSN)
     with psycopg.connect(TEST_DSN, autocommit=True) as conn:
@@ -65,20 +67,32 @@ def set_param(conn, name, value):
 
 
 def reset_params(conn):
-    set_param(conn, "eps_m", 50000)
+    set_param(conn, "eps_mi", 31)
     set_param(conn, "min_counties", 2)
     set_param(conn, "min_facilities_published", 5)
 
 
-def test_counties_far_apart_do_not_cluster_at_default_eps(db):
+def test_counties_sharing_an_edge_cluster_at_default_eps(db):
+    """Boundary distance: 48001 and 48003 share an edge, so their distance is 0."""
     reset_params(db)
     rows = dict(db.execute(
         "SELECT geoid, cluster_id FROM county_cluster_assignment").fetchall())
-    assert rows == {"48001": None, "48003": None}
+    assert rows["48001"] is not None and rows["48001"] == rows["48003"]
+
+
+def test_touching_counties_cluster_even_at_small_eps(db):
+    """Polygon distance 0 (shared edge) is within any positive eps."""
+    set_param(db, "eps_mi", 1)
+    try:
+        rows = dict(db.execute(
+            "SELECT geoid, cluster_id FROM county_cluster_assignment").fetchall())
+        assert rows["48001"] is not None and rows["48001"] == rows["48003"]
+    finally:
+        reset_params(db)
 
 
 def test_nearby_counties_cluster_together_and_publish(db):
-    set_param(db, "eps_m", 150000)
+    set_param(db, "eps_mi", 93)
     try:
         rows = dict(db.execute(
             "SELECT geoid, cluster_id FROM county_cluster_assignment").fetchall())
@@ -96,7 +110,7 @@ def test_nearby_counties_cluster_together_and_publish(db):
 
 
 def test_cluster_withheld_below_facility_threshold(db):
-    set_param(db, "eps_m", 150000)
+    set_param(db, "eps_mi", 93)
     set_param(db, "min_facilities_published", 10)
     try:
         assert db.execute("SELECT count(*) FROM county_cluster_published").fetchone()[0] == 0
@@ -110,7 +124,7 @@ def test_cluster_withheld_below_facility_threshold(db):
 
 
 def test_published_clusters_meet_threshold(db):
-    set_param(db, "eps_m", 150000)
+    set_param(db, "eps_mi", 93)
     try:
         bad = db.execute(
             """SELECT count(*) FROM county_cluster_summary

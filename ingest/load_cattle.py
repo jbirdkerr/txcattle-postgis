@@ -4,7 +4,8 @@ Steps:
   1. Check the expected fields exist (fails with the actual keys if NASS changed them).
   2. Map state FIPS + county code to GEOID and keep only Texas counties in tx_county.
   3. Parse values. Formatted numbers ('1,234') become integers. Markers such as
-     '(D)' (withheld to avoid disclosure) become NULL with suppression_code set.
+     '(D)' (withheld by NASS to protect confidentiality) become NULL with
+     suppression_code set.
   4. Replace the table contents in one transaction and report coverage.
 
 Usage:

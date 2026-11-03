@@ -23,7 +23,8 @@ MIGRATION_ORDER = [
     "002_counties.sql", "003_nass_cattle.sql", "004_cattle_views.sql",
     "005_fsis_facilities.sql", "006_county_facility_metrics.sql",
     "007_published_distance_rule.sql", "008_county_clusters.sql",
-    "009_county_summary.sql",
+    "009_county_summary.sql", "010_show_small_counts.sql",
+    "011_boundary_distance.sql", "012_miles.sql",
 ]
 
 
@@ -37,7 +38,7 @@ def db():
             conn.execute((MIGRATIONS / name).read_text())
     lcty.load(lcty.read_texas_counties(county_zip), TEST_DSN)
     with psycopg.connect(TEST_DSN, autocommit=True) as conn:
-        # Plants: three near 48001 (ranked on facility proximity, withheld at 2 within 25 km).
+        # Plants: two inside 48001, so 2 within 25 miles: ranked and flagged as a small count.
         for est_id, lat, lon in [("P1", 30.5 + 0.0899, -97.5), ("P3", 30.5 + 0.18, -97.5)]:
             conn.execute(
                 """INSERT INTO fsis_establishment
@@ -68,12 +69,14 @@ def test_cattle_rank_follows_inventory(db):
     assert ranks == {"48001": 1, "48003": 2}
 
 
-def test_withheld_facility_count_gets_no_proximity_rank(db):
-    # 48001 has 2 cattle plants within 25 km: withheld, so no proximity rank.
-    rank = db.execute(
-        "SELECT facility_proximity_rank FROM county_summary WHERE geoid = '48001'"
-    ).fetchone()[0]
-    assert rank is None
+def test_small_facility_count_is_ranked_and_flagged(db):
+    """Migration 010: 48001 has 2 cattle plants within 25 miles. Shown, ranked, and flagged."""
+    rank, flag = db.execute(
+        """SELECT facility_proximity_rank, cattle_25mi_small_count
+           FROM county_summary WHERE geoid = '48001'"""
+    ).fetchone()
+    assert rank is not None
+    assert flag is True
 
 
 def test_county_without_inventory_gets_no_cattle_rank(db):

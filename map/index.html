@@ -28,16 +28,16 @@
   <label>Show
     <select id="metric">
       <option value="all_cattle_head">All cattle inventory (latest NASS survey)</option>
-      <option value="cattle_within_25km">Cattle slaughter plants within 25 km</option>
-      <option value="nearest_cattle_km">Distance to nearest cattle slaughter plant (km)</option>
+      <option value="cattle_within_25mi">Cattle slaughter plants within 25 miles</option>
+      <option value="nearest_cattle_mi">Distance to nearest cattle slaughter plant (miles)</option>
       <option value="cluster_id">Descriptive clusters</option>
     </select>
   </label>
   <div id="legend"></div>
   <div class="note">
     Descriptive only. Shows where facilities and reported cattle are located. It does not
-    show causes or attribute disease to any facility. Grey counties have withheld values:
-    small facility counts (1 to 4) or suppressed NASS estimates. Withheld is not zero.
+    show causes or attribute disease to any facility. Grey counties have no published value:
+    NASS suppressed or absent. Facility counts of 1 to 4 are shown and marked as small counts.
   </div>
 </div>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -97,21 +97,22 @@ function renderLegend(metric, data) {
     }
     PALETTE.forEach((c, i) => rows.push([c, labels[i]]));
   }
-  rows.push([WITHHELD, "Withheld (small count or suppressed)"]);
+  rows.push([WITHHELD, "No value (NASS suppressed or no row)"]);
   legend.innerHTML = rows.map(([c, t]) =>
     `<div class="legend-row"><span class="swatch" style="background:${c}"></span>${t}</div>`
   ).join("");
 }
 
 function describe(p) {
-  const show = (v, unit = "") => (v === null || v === undefined) ? "withheld" : `${v.toLocaleString()}${unit}`;
+  const show = (v, unit = "") => (v === null || v === undefined) ? "no value" : `${v.toLocaleString()}${unit}`;
   const status = p.all_cattle_status ? ` (${p.all_cattle_status})` : "";
   return `
     <strong>${p.name} County</strong><br>
     All cattle: ${show(p.all_cattle_head)}${status}<br>
-    Cattle plants within 25 km: ${show(p.cattle_within_25km)}<br>
-    Nearest cattle plant: ${show(p.nearest_cattle_km, " km")}<br>
-    Dairy cow plants within 25 km: ${show(p.dairy_cow_within_25km)}<br>
+    Cattle plants within 25 miles: ${show(p.cattle_within_25mi)}${p.cattle_25mi_small_count ? " (small count)" : ""}<br>
+    Nearest cattle plant (to county boundary): ${show(p.nearest_cattle_mi, " mi")}<br>
+    Reference: distance from county centre: ${show(p.nearest_cattle_mi_centre, " mi")}<br>
+    Dairy cow plants within 25 miles: ${show(p.dairy_cow_within_25mi)}${p.dairy_25mi_small_count ? " (small count)" : ""}<br>
     Cluster: ${p.cluster_id === null || p.cluster_id === undefined ? "none published" : p.cluster_id}
   `;
 }
