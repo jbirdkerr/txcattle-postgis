@@ -48,7 +48,7 @@ This document separates three levels of confidence, because they matter for a po
 
 - [x] Run `uv run ingest/run_pipeline.py` locally. Every stage reported `ok`. The FSIS files were the 2026-10-31 copies already on disk, checked against the pinned checksums.
 - [ ] Review `site/index.html` in a browser. Check that the report and run summary open and close as one group, and that the map loads inside the frame.
-- [ ] Run the GitHub workflow once on a branch or `workflow_dispatch`. Expect to fix at least one problem on the first run: action versions, the PostGIS service container, or the `psql` install on the runner.
+- [x] Run the GitHub workflow once. First run on 2026-11-21 passed and deployed to Cloudflare Pages (https://txcattle.jbirdkerr.net).
 
 ### 2. Inputs that need setting up
 
@@ -56,8 +56,8 @@ This document separates three levels of confidence, because they matter for a po
 - [x] **FSIS checksums.** Pinned as repository variables, matching the October 2026 files in `DATA_SOURCES.md`.
 - [x] **NASS key.** Added as a repository secret.
 - [x] **Cloudflare Pages.** Project `txcattle` created; `CLOUDFLARE_ACCOUNT_ID` set as a repository secret.
-- [ ] **Cloudflare API token.** Add `CLOUDFLARE_API_TOKEN` (Cloudflare Pages: Edit) as a repository secret.
-- [ ] **Custom domain.** Attach `txcattle.jbirdkerr.net` to the Pages project in the Cloudflare dashboard (Workers & Pages > txcattle > Custom domains), like the other apps. The dashboard also creates the DNS record.
+- [x] **Cloudflare API token.** Added as a repository secret (Cloudflare Pages: Edit, this account only).
+- [x] **Custom domain.** `txcattle.jbirdkerr.net` attached to the Pages project.
 
 ### 3. Content for a non-specialist reader
 
@@ -107,4 +107,4 @@ Phase A is a complete portfolio piece without this. Phase B adds a durable workf
 - **Upstream changes.** FSIS files change weekly and NASS publishes on its own schedule. A rebuild can produce different numbers without any code change. The manifest records checksums so each published version can be traced.
 - **Small counts.** Most counties have few facilities, so single-county changes can look large. Readers may over-read the rankings.
 - **Milk cow sample.** The dairy analysis rests on a small number of published counties, and that will be true in every future year.
-- **Action versions.** The GitHub Actions versions in `publish.yml` weren't checked against current releases. Check them on the first run.
+- **Action versions.** Pinned to commit SHAs (checkout v7.0.1, cache v6.1.0, setup-uv v10.3.3), all on Node 24. Update them deliberately; nothing bumps them automatically.

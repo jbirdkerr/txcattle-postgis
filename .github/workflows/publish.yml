@@ -24,6 +24,8 @@ concurrency:
   group: publish-${{ github.ref }}
   cancel-in-progress: true
 
+# Actions are pinned to full commit SHAs (version in the comment). setup-uv no longer
+# publishes major tags, and SHA pins protect the build from a retagged release.
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -46,9 +48,9 @@ jobs:
       PGHOST: localhost
       PGPASSWORD: txcattle
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
 
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
@@ -66,7 +68,7 @@ jobs:
       # change, so they are cached between runs. fetch.py keeps files already present and
       # downloads only the missing ones, so a partial restore is fine.
       - name: Restore Census history files
-        uses: actions/cache@v4
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: data/raw/cbp
           key: cbp-${{ hashFiles('ingest/fetch.py') }}
