@@ -130,7 +130,6 @@ def main() -> None:
     shutil.copytree(MAP_SRC / "data", SITE / "map" / "data")
     for dest in (SITE, SITE / "map"):
         shutil.copy(MAP_SRC / "favicon.ico", dest / "favicon.ico")
-    (SITE / ".nojekyll").touch()  # serve files exactly as built on GitHub Pages
     (SITE / "index.html").write_text(render_page(report_md, manifest))
     print(f"wrote   {(SITE / 'index.html').relative_to(ROOT)}")
 

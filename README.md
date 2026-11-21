@@ -111,13 +111,14 @@ with the outputs you publish.
 
 ## Automated build and publish (GitHub Actions)
 
-`.github/workflows/pages.yml` runs the tests, runs the full pipeline, and publishes the
-page to GitHub Pages on every push to `main`.
+`.github/workflows/publish.yml` runs the tests, runs the full pipeline, and publishes the
+page to Cloudflare Pages (project `txcattle`, served at https://txcattle.jbirdkerr.net and
+https://txcattle.pages.dev) on every push to `main`. A manual run on another branch publishes a preview deployment instead.
 
 Set these once in the repository:
 
-- **Settings > Pages > Source:** GitHub Actions
-- **Secret:** `NASS_API_KEY`
+- **Secrets:** `NASS_API_KEY`, `CLOUDFLARE_API_TOKEN` (an API token with Cloudflare
+  Pages: Edit), and `CLOUDFLARE_ACCOUNT_ID`
 - **Variables:** `FSIS_DIRECTORY_URL`, `FSIS_DIRECTORY_SHA256`, `FSIS_SUPPLEMENT_URL`,
   `FSIS_SUPPLEMENT_SHA256`. The URLs point at the FSIS files attached to a GitHub release
   in this repository (see below); the checksums match those files. A file whose checksum
@@ -170,7 +171,7 @@ environment variables above.
   never edited; changes go in a new numbered file.
 - `ingest/`: Python loading, export, and page-building scripts. Python is used for loading
   and presentation only; all analysis is in SQL.
-- `.github/workflows/`: the automated build and GitHub Pages deploy.
+- `.github/workflows/`: the automated build and Cloudflare Pages deploy.
 - `tests/`: pytest tests (synthetic data only) and validation SQL for the real data.
 - `map/`: static MapLibre page, its favicon, and the data files it reads.
 - `assets/make_favicon.py`: draws the cow favicon (`uv run --with pillow python assets/make_favicon.py`).
