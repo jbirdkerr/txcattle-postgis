@@ -1,0 +1,98 @@
+# Build the analysis from public sources and publish the page to GitHub Pages.
+#
+# Required repository settings:
+#   Settings > Pages > Source: GitHub Actions
+#   Secrets:   NASS_API_KEY (free key from quickstats.nass.usda.gov/api)
+#   Variables: FSIS_DIRECTORY_URL, FSIS_DIRECTORY_SHA256,
+#              FSIS_SUPPLEMENT_URL, FSIS_SUPPLEMENT_SHA256
+# No FSIS data is committed. FSIS refuses automated downloads, so the URLs point at an
+# unmodified copy attached to a release in this repository (see README). The pinned
+# checksums stop the run if a file changes.
+name: Build and publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: txcattle
+          POSTGRES_PASSWORD: txcattle
+          POSTGRES_DB: txcattle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U txcattle -d txcattle"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://txcattle:txcattle@localhost:5432/txcattle
+      TEST_DATABASE_URL: postgresql://txcattle:txcattle@localhost:5432/txcattle_test
+      USE_LOCAL_PSQL: "1"
+      PGHOST: localhost
+      PGPASSWORD: txcattle
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install Python dependencies
+        run: uv sync --locked
+
+      - name: Create test database
+        run: psql "postgresql://txcattle:txcattle@localhost:5432/txcattle" -c "CREATE DATABASE txcattle_test OWNER txcattle;"
+
+      - name: Run tests
+        run: uv run pytest -q
+
+      # The Census County Business Patterns files (about 600 MB) are historical and do not
+      # change, so they are cached between runs. fetch.py keeps files already present and
+      # downloads only the missing ones, so a partial restore is fine.
+      - name: Restore Census history files
+        uses: actions/cache@v4
+        with:
+          path: data/raw/cbp
+          key: cbp-${{ hashFiles('ingest/fetch.py') }}
+          restore-keys: cbp-
+
+      - name: Build the pipeline
+        env:
+          NASS_API_KEY: ${{ secrets.NASS_API_KEY }}
+          FSIS_DIRECTORY_URL: ${{ vars.FSIS_DIRECTORY_URL }}
+          FSIS_DIRECTORY_SHA256: ${{ vars.FSIS_DIRECTORY_SHA256 }}
+          FSIS_SUPPLEMENT_URL: ${{ vars.FSIS_SUPPLEMENT_URL }}
+          FSIS_SUPPLEMENT_SHA256: ${{ vars.FSIS_SUPPLEMENT_SHA256 }}
+        run: uv run ingest/run_pipeline.py
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

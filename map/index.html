@@ -4,40 +4,103 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Texas cattle slaughter capacity by county (descriptive)</title>
+<link rel="icon" href="favicon.ico">
 <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
 <style>
   html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; }
   #map { position: absolute; inset: 0; background: #f4f4f1; }
   #panel {
-    position: absolute; top: 12px; left: 12px; width: 280px; background: #fff;
+    position: absolute; top: 12px; left: 12px; width: 300px; background: #fff;
     padding: 12px 14px; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.25);
-    font-size: 13px; line-height: 1.4;
+    font-size: 13px; line-height: 1.4; box-sizing: border-box;
+    max-height: calc(100% - 24px); overflow-y: auto;
   }
+  @media (max-width: 420px) { #panel { left: 8px; right: 8px; width: auto; max-height: 55%; } }
   #panel h1 { font-size: 15px; margin: 0 0 6px; }
   #panel select { width: 100%; margin: 4px 0 10px; padding: 4px; }
+  .modes { display: flex; gap: 4px; margin: 0 0 10px; }
+  .modes button {
+    flex: 1; padding: 5px 6px; font: inherit; border: 1px solid #bbb; background: #f7f7f7;
+    border-radius: 4px; cursor: pointer;
+  }
+  .modes button[aria-pressed="true"] { background: #333; color: #fff; border-color: #333; }
+  .year-row { display: flex; align-items: center; gap: 8px; margin: 4px 0 2px; }
+  .year-row input[type=range] { flex: 1; }
+  .year-row button { font: inherit; padding: 2px 8px; border: 1px solid #bbb; background: #f7f7f7; border-radius: 4px; cursor: pointer; }
+  #year-label { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  #year-code { color: #555; font-size: 12px; }
   .legend-row { display: flex; align-items: center; gap: 6px; margin: 2px 0; }
   .swatch { width: 16px; height: 12px; border: 1px solid #999; display: inline-block; }
   .note { color: #555; font-size: 12px; margin-top: 10px; }
+  .chart-title { font-weight: 600; margin: 12px 0 2px; }
+  .chart-sub { color: #555; font-size: 12px; margin: 0 0 4px; }
+  #chart { position: relative; }
+  #chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+  #chart-tip {
+    position: absolute; pointer-events: none; background: #fff; border: 1px solid #ccc;
+    border-radius: 4px; padding: 4px 6px; font-size: 12px; white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2); display: none;
+  }
+  details.table-view { margin-top: 6px; font-size: 12px; }
+  details.table-view summary { cursor: pointer; color: #333; }
+  details.table-view table { border-collapse: collapse; width: 100%; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  details.table-view th, details.table-view td { padding: 2px 4px; border-bottom: 1px solid #eee; text-align: right; }
+  details.table-view th:first-child, details.table-view td:first-child { text-align: left; }
   .maplibregl-popup-content { font-size: 13px; line-height: 1.4; }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <div id="map"></div>
 <div id="panel">
   <h1>Texas counties: cattle slaughter capacity</h1>
-  <label>Show
-    <select id="metric">
-      <option value="all_cattle_head">All cattle inventory (latest NASS survey)</option>
-      <option value="cattle_within_25mi">Cattle slaughter plants within 25 miles</option>
-      <option value="nearest_cattle_mi">Distance to nearest cattle slaughter plant (miles)</option>
-      <option value="cluster_id">Descriptive clusters</option>
-    </select>
-  </label>
+  <div class="modes" role="group" aria-label="Map view">
+    <button type="button" id="mode-current" aria-pressed="true">Current (FSIS)</button>
+    <button type="button" id="mode-history" aria-pressed="false">History, 1986&ndash;2016</button>
+  </div>
+
+  <div id="current-controls">
+    <label>Show
+      <select id="metric">
+        <option value="all_cattle_head">All cattle inventory (latest NASS survey)</option>
+        <option value="cattle_within_25mi">Cattle slaughter plants within 25 miles</option>
+        <option value="nearest_cattle_mi">Distance to nearest cattle slaughter plant (miles)</option>
+        <option value="cluster_id">Descriptive clusters</option>
+      </select>
+    </label>
+  </div>
+
+  <div id="history-controls" hidden>
+    <div><span id="year-label"></span> <span id="year-code"></span></div>
+    <div class="year-row">
+      <button type="button" id="play" aria-label="Play through the years">&#9654;</button>
+      <input type="range" id="year" aria-label="Year">
+    </div>
+    <div class="note" style="margin-top:2px">Slaughter establishments per county (Census County Business Patterns).</div>
+  </div>
+
   <div id="legend"></div>
-  <div class="note">
+
+  <div id="history-chart" hidden>
+    <div class="chart-title">Texas: cattle per slaughter establishment</div>
+    <p class="chart-sub">January 1 cattle inventory &divide; slaughter establishments, statewide. The dashed line marks the 1997/98 industry code change; the two sides are not comparable.</p>
+    <div id="chart"><div id="chart-tip"></div></div>
+    <details class="table-view">
+      <summary>Show as a table</summary>
+      <table id="state-table"><thead><tr><th>Year</th><th>Establishments</th><th>Cattle</th><th>Cattle per est.</th></tr></thead><tbody></tbody></table>
+    </details>
+  </div>
+
+  <div class="note" id="note-current">
     Descriptive only. Shows where facilities and reported cattle are located. It does not
     show causes or attribute disease to any facility. Grey counties have no published value:
     NASS suppressed or absent. Facility counts of 1 to 4 are shown and marked as small counts.
+  </div>
+  <div class="note" id="note-history" hidden>
+    Descriptive only. History counts every employer establishment in the slaughter industry
+    (cattle, hogs, sheep, game; inspected or not), so it is a different measure from the
+    current FSIS view and the two should not be compared. Census stopped publishing most
+    county counts after 2016. Counts of 1 to 4 are small and swing from year to year.
   </div>
 </div>
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -45,9 +108,19 @@
 const WITHHELD = "#c9c9c9";
 const PALETTE = ["#fee5d9", "#fcae91", "#fb6a4a", "#de2d26", "#a50f15"];
 const CLUSTER_COLORS = ["#1f78b4", "#33a02c", "#ff7f00", "#6a3d9a", "#b15928"];
+// History uses fixed classes so a colour means the same count in every year.
+const HISTORY_CLASSES = [
+  { min: 0, max: 0, color: "#fbfaf6", label: "0" },
+  { min: 1, max: 1, color: PALETTE[1], label: "1 (small count)" },
+  { min: 2, max: 2, color: PALETTE[2], label: "2 (small count)" },
+  { min: 3, max: 4, color: PALETTE[3], label: "3 to 4 (small count)" },
+  { min: 5, max: Infinity, color: PALETTE[4], label: "5 and above" },
+];
 
-const metricSelect = document.getElementById("metric");
-const legend = document.getElementById("legend");
+const $ = id => document.getElementById(id);
+const metricSelect = $("metric");
+const legend = $("legend");
+const fmt = v => (v === null || v === undefined) ? "no value" : v.toLocaleString();
 
 const map = new maplibregl.Map({
   container: "map",
@@ -55,11 +128,22 @@ const map = new maplibregl.Map({
   center: [-99.5, 31.2],
   zoom: 5.2,
 });
-map.addControl(new maplibregl.NavigationControl(), "top-right");
+map.addControl(new maplibregl.NavigationControl(), "bottom-right");
 
-const isNum = (p, key) => typeof p[key] === "number";
+// Frame Texas in the part of the map the panel does not cover.
+const TEXAS_BOUNDS = [[-106.65, 25.84], [-93.51, 36.5]];
+function frameTexas() {
+  const panel = $("panel"), narrow = window.innerWidth <= 420;
+  const padding = narrow
+    ? { top: panel.offsetHeight + 16, bottom: 16, left: 12, right: 12 }
+    : { top: 20, bottom: 20, left: panel.offsetWidth + 32, right: 20 };
+  map.fitBounds(TEXAS_BOUNDS, { padding, animate: false });
+}
 
-// Quantile breaks from the data, so each class holds a similar number of counties.
+const state = { mode: "current", yearIndex: 0, history: null, playing: null };
+
+// ---------- Current (FSIS) view ----------
+
 function quantileBreaks(values, n) {
   const v = values.slice().sort((a, b) => a - b);
   const out = [];
@@ -82,7 +166,12 @@ function colorExpression(metric, data) {
   return ["case", ["!=", ["typeof", ["get", metric]], "number"], WITHHELD, expr];
 }
 
-function renderLegend(metric, data) {
+function legendHtml(rows) {
+  return rows.map(([c, t]) =>
+    `<div class="legend-row"><span class="swatch" style="background:${c}"></span>${t}</div>`).join("");
+}
+
+function renderCurrentLegend(metric, data) {
   const rows = [];
   if (metric === "cluster_id") {
     const ids = [...new Set(data.features.map(f => f.properties.cluster_id).filter(x => typeof x === "number"))].sort((a, b) => a - b);
@@ -98,12 +187,10 @@ function renderLegend(metric, data) {
     PALETTE.forEach((c, i) => rows.push([c, labels[i]]));
   }
   rows.push([WITHHELD, "No value (NASS suppressed or no row)"]);
-  legend.innerHTML = rows.map(([c, t]) =>
-    `<div class="legend-row"><span class="swatch" style="background:${c}"></span>${t}</div>`
-  ).join("");
+  legend.innerHTML = legendHtml(rows);
 }
 
-function describe(p) {
+function describeCurrent(p) {
   const show = (v, unit = "") => (v === null || v === undefined) ? "no value" : `${v.toLocaleString()}${unit}`;
   const status = p.all_cattle_status ? ` (${p.all_cattle_status})` : "";
   return `
@@ -117,9 +204,169 @@ function describe(p) {
   `;
 }
 
-function applyMetric(metric) {
-  map.setPaintProperty("counties", "fill-color", colorExpression(metric, window.countyData));
-  renderLegend(metric, window.countyData);
+// ---------- History view ----------
+
+const classFor = n => HISTORY_CLASSES.find(c => n >= c.min && n <= c.max);
+
+function historyExpression() {
+  const h = state.history, i = state.yearIndex;
+  const expr = ["match", ["get", "geoid"]];
+  for (const [geoid, c] of Object.entries(h.counties)) expr.push(geoid, classFor(c.estab[i]).color);
+  expr.push(WITHHELD);
+  return expr;
+}
+
+function describeHistory(p) {
+  const h = state.history, i = state.yearIndex, year = h.years[i];
+  const c = h.counties[p.geoid];
+  if (!c) return `<strong>${p.name} County</strong><br>No history`;
+  const n = c.estab[i];
+  const cattle = h.no_county_cattle_years.includes(year)
+    ? "no county estimates (NASS, 1988&ndash;1992)" : fmt(c.cattle[i]);
+  return `
+    <strong>${p.name} County, ${year}</strong><br>
+    Slaughter establishments: ${n}${n >= 1 && n <= 4 ? " (small count)" : ""}<br>
+    All cattle (Jan 1): ${cattle}<br>
+    <span style="color:#666">${h.code_system[year]}</span>
+  `;
+}
+
+function renderHistory() {
+  const h = state.history, year = h.years[state.yearIndex];
+  $("year").value = state.yearIndex;
+  $("year-label").textContent = year;
+  $("year-code").textContent = h.code_system[year] + (year <= 1997 ? " (pre-1998 definition)" : "");
+  map.setPaintProperty("counties", "fill-color", historyExpression());
+  const counts = HISTORY_CLASSES.map(() => 0);
+  Object.values(h.counties).forEach(c => counts[HISTORY_CLASSES.indexOf(classFor(c.estab[state.yearIndex]))]++);
+  legend.innerHTML = legendHtml(HISTORY_CLASSES.map((c, k) => [c.color, `${c.label} <span style="color:#777">&middot; ${counts[k]} ${counts[k] === 1 ? "county" : "counties"}</span>`]));
+  updateChartMarker(year);
+}
+
+// ---------- Statewide chart (inline SVG, one series, one axis) ----------
+
+const CH = { w: 272, h: 150, l: 40, r: 8, t: 10, b: 22 };
+let chartScale = null;
+
+function buildChart() {
+  const rows = state.history.state.filter(r => r.cattle_per_estab !== null);
+  const years = rows.map(r => r.year), vals = rows.map(r => r.cattle_per_estab);
+  const x0 = Math.min(...years), x1 = Math.max(...years);
+  const yMax = Math.ceil(Math.max(...vals) / 50000) * 50000;
+  const sx = y => CH.l + (y - x0) / (x1 - x0) * (CH.w - CH.l - CH.r);
+  const sy = v => CH.t + (1 - v / yMax) * (CH.h - CH.t - CH.b);
+  chartScale = { sx, sy, rows, x0, x1 };
+
+  const ns = "http://www.w3.org/2000/svg";
+  let svg = `<svg xmlns="${ns}" viewBox="0 0 ${CH.w} ${CH.h}" role="img" aria-label="Line chart of Texas cattle per slaughter establishment, ${x0} to ${x1}">`;
+  for (let v = 0; v <= yMax; v += 50000) {
+    svg += `<line x1="${CH.l}" x2="${CH.w - CH.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="#eee"/>`;
+    svg += `<text x="${CH.l - 4}" y="${sy(v) + 3}" font-size="10" text-anchor="end" fill="#666">${v / 1000}k</text>`;
+  }
+  [x0, 2000, 2010, x1].forEach(y => {
+    svg += `<text x="${sx(y)}" y="${CH.h - 6}" font-size="10" text-anchor="middle" fill="#666">${y}</text>`;
+  });
+  svg += `<line x1="${sx(1997.5)}" x2="${sx(1997.5)}" y1="${CH.t}" y2="${CH.h - CH.b}" stroke="#888" stroke-dasharray="3 3"/>`;
+  // The two code systems are drawn as separate segments, never joined across the break.
+  [rows.filter(r => r.year <= 1997), rows.filter(r => r.year >= 1998)].forEach(seg => {
+    if (!seg.length) return;
+    const d = seg.map((r, k) => `${k ? "L" : "M"}${sx(r.year).toFixed(1)},${sy(r.cattle_per_estab).toFixed(1)}`).join("");
+    svg += `<path d="${d}" fill="none" stroke="${PALETTE[4]}" stroke-width="2" stroke-linejoin="round"/>`;
+  });
+  // County data stops in 2016; shade the years the map cannot show.
+  const lastCounty = Math.max(...state.history.years);
+  svg += `<rect x="${sx(lastCounty + 0.5)}" y="${CH.t}" width="${sx(x1) - sx(lastCounty + 0.5)}" height="${CH.h - CH.t - CH.b}" fill="#000" opacity="0.04"/>`;
+  svg += `<g id="cursor" pointer-events="none"><line id="cursor-line" y1="${CH.t}" y2="${CH.h - CH.b}" stroke="#333" stroke-width="1"/><circle id="cursor-dot" r="4" fill="${PALETTE[4]}" stroke="#fff" stroke-width="2"/></g>`;
+  svg += `<g id="hover" pointer-events="none" style="display:none"><line id="hover-line" y1="${CH.t}" y2="${CH.h - CH.b}" stroke="#999" stroke-dasharray="2 2"/><circle id="hover-dot" r="4" fill="${PALETTE[4]}" stroke="#fff" stroke-width="2"/></g>`;
+  svg += `<rect id="hit" x="${CH.l}" y="0" width="${CH.w - CH.l - CH.r}" height="${CH.h}" fill="transparent"/>`;
+  svg += `</svg>`;
+  $("chart").insertAdjacentHTML("beforeend", svg);
+
+  const tip = $("chart-tip"), hover = $("chart").querySelector("#hover");
+  const hit = $("chart").querySelector("#hit");
+  const nearest = evt => {
+    const box = hit.ownerSVGElement.getBoundingClientRect();
+    const xv = (evt.clientX - box.left) * (CH.w / box.width);
+    let best = rows[0];
+    rows.forEach(r => { if (Math.abs(sx(r.year) - xv) < Math.abs(sx(best.year) - xv)) best = r; });
+    return { r: best, box };
+  };
+  hit.addEventListener("pointermove", evt => {
+    const { r, box } = nearest(evt);
+    const x = sx(r.year), y = sy(r.cattle_per_estab);
+    hover.style.display = "";
+    hover.querySelector("#hover-line").setAttribute("x1", x);
+    hover.querySelector("#hover-line").setAttribute("x2", x);
+    hover.querySelector("#hover-dot").setAttribute("cx", x);
+    hover.querySelector("#hover-dot").setAttribute("cy", y);
+    tip.innerHTML = `<strong>${r.year}</strong> &middot; ${r.code_system}<br>${r.cattle_per_estab.toLocaleString()} cattle per establishment<br>${r.slaughter_estab} establishments, ${r.all_cattle_head.toLocaleString()} cattle`;
+    tip.style.display = "block";
+    const px = x * box.width / CH.w, tw = tip.offsetWidth;
+    tip.style.left = Math.max(0, Math.min(box.width - tw, px - tw / 2)) + "px";
+    // Above the point when there is room, otherwise below it, so the tip stays over the plot.
+    const py = y * box.height / CH.h;
+    tip.style.top = (py - tip.offsetHeight - 10 >= 0 ? py - tip.offsetHeight - 10 : py + 12) + "px";
+  });
+  hit.addEventListener("pointerleave", () => { hover.style.display = "none"; tip.style.display = "none"; });
+  hit.addEventListener("click", evt => {
+    const k = state.history.years.indexOf(nearest(evt).r.year);
+    if (k >= 0) { stopPlay(); state.yearIndex = k; renderHistory(); }
+  });
+
+  $("state-table").querySelector("tbody").innerHTML = state.history.state.map(r =>
+    `<tr><td>${r.year}${r.year === 1998 ? " *" : ""}</td><td>${r.slaughter_estab}</td><td>${fmt(r.all_cattle_head)}</td><td>${fmt(r.cattle_per_estab)}</td></tr>`
+  ).join("") + `<tr><td colspan="4" style="text-align:left;color:#666">* NAICS 311611 from 1998; SIC 2011 before.</td></tr>`;
+}
+
+function updateChartMarker(year) {
+  if (!chartScale) return;
+  const r = chartScale.rows.find(x => x.year === year);
+  const g = $("chart").querySelector("#cursor");
+  if (!r) { g.style.display = "none"; return; }
+  g.style.display = "";
+  const x = chartScale.sx(year), y = chartScale.sy(r.cattle_per_estab);
+  g.querySelector("#cursor-line").setAttribute("x1", x);
+  g.querySelector("#cursor-line").setAttribute("x2", x);
+  g.querySelector("#cursor-dot").setAttribute("cx", x);
+  g.querySelector("#cursor-dot").setAttribute("cy", y);
+}
+
+function stopPlay() {
+  if (state.playing) clearInterval(state.playing);
+  state.playing = null;
+  $("play").innerHTML = "&#9654;";
+  $("play").setAttribute("aria-label", "Play through the years");
+}
+
+function togglePlay() {
+  if (state.playing) return stopPlay();
+  if (state.yearIndex >= state.history.years.length - 1) state.yearIndex = 0;
+  $("play").innerHTML = "&#10074;&#10074;";
+  $("play").setAttribute("aria-label", "Pause");
+  state.playing = setInterval(() => {
+    if (state.yearIndex >= state.history.years.length - 1) return stopPlay();
+    state.yearIndex++;
+    renderHistory();
+  }, 900);
+}
+
+// ---------- Mode switching ----------
+
+function setMode(mode) {
+  if (mode === "history" && !state.history) return;
+  stopPlay();
+  state.mode = mode;
+  $("mode-current").setAttribute("aria-pressed", mode === "current");
+  $("mode-history").setAttribute("aria-pressed", mode === "history");
+  for (const id of ["current-controls", "note-current"]) $(id).hidden = mode !== "current";
+  for (const id of ["history-controls", "history-chart", "note-history"]) $(id).hidden = mode !== "history";
+  frameTexas();   // the panel height changes with the view
+  if (mode === "current") {
+    map.setPaintProperty("counties", "fill-color", colorExpression(metricSelect.value, window.countyData));
+    renderCurrentLegend(metricSelect.value, window.countyData);
+  } else {
+    renderHistory();
+  }
 }
 
 map.on("load", async () => {
@@ -136,15 +383,34 @@ map.on("load", async () => {
   const popup = new maplibregl.Popup({ closeButton: false, closeOnClick: false });
   map.on("mousemove", "counties", e => {
     map.getCanvas().style.cursor = "pointer";
-    popup.setLngLat(e.lngLat).setHTML(describe(e.features[0].properties)).addTo(map);
+    const p = e.features[0].properties;
+    popup.setLngLat(e.lngLat).setHTML(state.mode === "history" ? describeHistory(p) : describeCurrent(p)).addTo(map);
   });
   map.on("mouseleave", "counties", () => {
     map.getCanvas().style.cursor = "";
     popup.remove();
   });
 
-  metricSelect.addEventListener("change", () => applyMetric(metricSelect.value));
-  applyMetric(metricSelect.value);
+  metricSelect.addEventListener("change", () => setMode("current"));
+  $("mode-current").addEventListener("click", () => setMode("current"));
+  $("mode-history").addEventListener("click", () => setMode("history"));
+  setMode("current");
+
+  // History is optional: the current view works without it.
+  try {
+    const h = await fetch("data/texas_history.json");
+    if (!h.ok) throw new Error(h.status);
+    state.history = await h.json();
+    state.yearIndex = state.history.years.length - 1;
+    const slider = $("year");
+    slider.min = 0; slider.max = state.history.years.length - 1; slider.step = 1;
+    slider.addEventListener("input", () => { stopPlay(); state.yearIndex = +slider.value; renderHistory(); });
+    $("play").addEventListener("click", togglePlay);
+    buildChart();
+  } catch (err) {
+    $("mode-history").disabled = true;
+    $("mode-history").title = "History data not built";
+  }
 });
 </script>
 </body>

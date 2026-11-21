@@ -8,6 +8,7 @@ dependencies = [
     "requests>=2.31",
     "pyshp>=2.3",
     "shapely>=2.0",
+    "markdown>=3.11.2",
 ]
 
 [dependency-groups]

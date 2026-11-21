@@ -48,7 +48,7 @@ def main() -> None:
         latest_year = fetch(conn, "SELECT max(year) FROM nass_county_cattle WHERE source_program='SURVEY'")[0][0]
 
         coverage = fetch(conn, """
-            SELECT year, source_program,
+            SELECT year::text, source_program,
                    count(*) FILTER (WHERE milk_cow_status = 'published'),
                    count(*) FILTER (WHERE milk_cow_status = 'suppressed'),
                    count(*) FILTER (WHERE milk_cow_status = 'no row')
@@ -73,6 +73,24 @@ def main() -> None:
             SELECT facility_proximity_rank, name, cattle_within_25mi, nearest_cattle_mi
             FROM county_summary WHERE facility_proximity_rank IS NOT NULL
             ORDER BY facility_proximity_rank LIMIT 10""")
+
+        # History: Texas-wide series at selected years, plus county coverage at the ends
+        # of the consistent NAICS period.
+        history = fetch(conn, """
+            SELECT year::text, code_system, slaughter_estab, all_cattle_head, cattle_per_estab::int
+            FROM state_history_published
+            WHERE year IN (1986, 1990, 1995, 1997, 1998, 2000, 2005, 2010, 2015, 2016, 2020)
+               OR year = (SELECT max(year) FROM state_history_published)
+            ORDER BY year""")
+        county_years = fetch(conn, """
+            SELECT min(year), max(year) FROM county_history_published""")[0]
+        counties_with = dict(fetch(conn, """
+            SELECT year, count(*) FILTER (WHERE slaughter_estab > 0)
+            FROM county_history_published WHERE year IN (1998, 2016) GROUP BY year"""))
+        code_jump = fetch(conn, """
+            SELECT max(slaughter_estab) FILTER (WHERE year = 1998)
+                 - max(slaughter_estab) FILTER (WHERE year = 1997)
+            FROM state_history_published""")[0][0]
 
     cluster_lines = "\n".join(
         f"- Cluster {cid}: {n_c} counties, {n_f} cattle plants within 25 miles of its counties."
@@ -134,6 +152,21 @@ Two separate rankings. They measure different things and should not be combined.
 
 Distances are from the county boundary: 0 means a plant is inside the county.
 
+## History of slaughter establishments
+
+A separate, longer series from Census County Business Patterns: employer establishments
+in the slaughter industry (all livestock except poultry, inspected or not). This is a
+different measure from the FSIS plant counts above, and the two are not compared.
+
+{table(["Year", "Industry code", "Establishments", "All cattle, Jan 1 (head)", "Cattle per establishment"], history)}
+
+The industry code changed from SIC 2011 to NAICS 311611 in 1998, which changed the count by
+{code_jump:+} establishments in one year. Compare years only within one code system. Counties with
+at least one establishment: {counties_with.get(1998, "n/a")} in 1998 and
+{counties_with.get(2016, "n/a")} in 2016. County detail on the map covers
+{county_years[0]} to {county_years[1]}; from 2017 Census no longer publishes most small
+county counts, so later years are statewide only.
+
 ## Limitations
 
 See `LIMITATIONS.md`. The most important points for reading this summary:
@@ -143,6 +176,7 @@ See `LIMITATIONS.md`. The most important points for reading this summary:
 - Inventories are modelled county estimates, not counts.
 - Dairy results rest on the small milk cow sample shown above.
 - Clusters are descriptive groupings with arbitrary labels.
+- The history series counts a broader set of establishments than FSIS and breaks in 1998.
 """
     OUT.write_text(text)
     print(f"wrote   {OUT.relative_to(ROOT)}")

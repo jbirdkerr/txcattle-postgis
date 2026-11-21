@@ -79,6 +79,48 @@ States. Cite each publisher as the source.
   - Individual plant records are staging data. Only county-level aggregates are published.
 - **Status:** Loaded and validated.
 
+## 4. Census County Business Patterns (history of slaughter establishments)
+
+- **Used for:** the number of slaughter establishments by Texas county, 1986 to 2016,
+  and for Texas as a whole, 1986 to 2023. Shown as the map's history view and in the
+  report's history section.
+- **Publisher:** U.S. Census Bureau.
+- **Source:** bulk files at
+  `https://www2.census.gov/programs-surveys/cbp/datasets/{year}/cbp{yy}co.zip` (county) and
+  `.../cbp{yy}st.zip` (state). No API key needed. The Census Data API holds the same data
+  but now requires a key for data requests.
+- **Industry:** SIC 2011 (Meat Packing Plants) to 1997; NAICS 311611 (Animal, except
+  Poultry, Slaughtering) from 1998. The 1998 change added 50 Texas establishments in one
+  year, so the two periods are not comparable.
+- **Retrieval:** 2026-11-21. 31 county files and 38 state files, 585 MB. `fetch.py history`
+  prints the SHA-256 of every file, and the run manifest does not include them (they are
+  inputs, not outputs).
+- **Checks on this retrieval:** in every county year (1986 to 2016) the county rows sum
+  exactly to the Texas total and no establishments are statewide-unallocated, so a county
+  with no row has zero employer establishments. The loader repeats this check on every run.
+- **Caveats:**
+  - Counts every employer establishment in the industry: cattle, hogs, sheep, and game,
+    federally inspected or not. Businesses with no employees are excluded. This is a
+    different measure from the FSIS plant counts.
+  - From 2017, Census applies a new disclosure method that drops most small county cells.
+    Texas rows fall from 72 counties (2016) to 6 (2017), so county years stop at 2016.
+  - The earliest bulk file is 1986.
+- **Status:** Loaded and validated.
+
+## 5. USDA NASS all-cattle history
+
+- **Used for:** cattle inventory in the history view and the statewide cattle-per-
+  establishment series.
+- **Query:** `CATTLE, INCL CALVES - INVENTORY`, SURVEY, reference period FIRST OF JAN,
+  domain TOTAL; county level from 1975 and state level from 1986. Saved as
+  `data/raw/nass_tx_all_cattle_history.json`.
+- **Retrieval:** 2026-11-21. 11,998 county records (11,938 after dropping combined-county
+  code 998) and 41 state years. SHA-256
+  `7d2d35ba5eb58aaade8964329daa8b70ed92a9c5599d7370bfd0b64177999dd7`.
+- **Coverage:** county estimates for 1975 to 1987 and 1993 to 2026. NASS published no
+  Texas county estimates for 1988 to 1992. No county value in this series is suppressed.
+- **Status:** Loaded and validated.
+
 ## Considered, not used
 
 - **USDA APHIS HPAI confirmed cases in livestock.** Published by state only, not by county,

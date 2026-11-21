@@ -12,6 +12,9 @@ any facility, or identify outbreak zones. Read `LIMITATIONS.md` before interpret
 
 - `REPORT.md`: a short written summary generated from the published views.
 - `map/data/texas_counties.geojson` and `map/index.html`: a static county map.
+- `map/data/texas_history.json`: slaughter establishments by county, 1986 to 2016, and a
+  statewide cattle-per-establishment series, 1986 to 2023. The map shows it as a
+  "History" view with a year slider.
 - SQL views (`county_summary`, `county_facility_published`, `county_cluster_published`) for analysis.
 
 ## Requirements
@@ -80,7 +83,19 @@ Check: Texas establishments loaded, cattle and dairy cow slaughter counts, and
 county-assignment mismatches (expected 0). FSIS covers beef and poultry slaughter, not
 dairy processing.
 
-**5. Outputs.**
+**5. History (Census County Business Patterns and NASS).** Downloads about 600 MB of
+Census bulk files once; files already present are kept.
+
+```bash
+NASS_API_KEY=your_key uv run ingest/fetch.py history
+uv run ingest/load_history.py
+uv run ingest/export_history.py        # writes map/data/texas_history.json
+```
+
+Check: the loader reports that county establishment counts sum to the Texas total in
+every year. A mismatch stops the load.
+
+**6. Outputs.**
 
 ```bash
 uv run ingest/export_geojson.py        # writes map/data/texas_counties.geojson
@@ -94,14 +109,71 @@ The map must be served over HTTP. Opening `index.html` directly will not load th
 `DATA_SOURCES.md`. Results can change if the source files change, so keep the checksums
 with the outputs you publish.
 
+## Automated build and publish (GitHub Actions)
+
+`.github/workflows/pages.yml` runs the tests, runs the full pipeline, and publishes the
+page to GitHub Pages on every push to `main`.
+
+Set these once in the repository:
+
+- **Settings > Pages > Source:** GitHub Actions
+- **Secret:** `NASS_API_KEY`
+- **Variables:** `FSIS_DIRECTORY_URL`, `FSIS_DIRECTORY_SHA256`, `FSIS_SUPPLEMENT_URL`,
+  `FSIS_SUPPLEMENT_SHA256`. The URLs point at the FSIS files attached to a GitHub release
+  in this repository (see below); the checksums match those files. A file whose checksum
+  changes stops the run, so an unexpected version is never published silently.
+
+### FSIS files: why a release, and how to refresh them
+
+The FSIS website refuses automated downloads (it returned 403 Forbidden to a scripted
+request), so the workflow cannot fetch the files from FSIS directly. Instead, an
+unmodified copy of the two CSVs is attached to a release in this repository, and the
+workflow downloads that copy. FSIS data is a U.S. government work in the public domain.
+
+To publish newer FSIS data:
+
+1. Download the MPI Directory and the Establishment Demographic supplement from the FSIS
+   page in a browser, saved as `data/raw/fsis_mpi_directory.csv` and
+   `data/raw/fsis_mpi_supplement.csv`.
+2. Run the pipeline locally and review the report.
+3. Attach the files to a new release, named for the download date:
+
+   ```bash
+   gh release create fsis-YYYY-MM-DD data/raw/fsis_mpi_directory.csv data/raw/fsis_mpi_supplement.csv \
+     --title "FSIS files, YYYY-MM-DD" --notes "Unmodified FSIS MPI Directory and supplement, downloaded YYYY-MM-DD."
+   ```
+
+4. Point the four variables at the new release and its checksums:
+
+   ```bash
+   TAG=fsis-YYYY-MM-DD; BASE=https://github.com/jbirdkerr/txcattle-postgis/releases/download/$TAG
+   gh variable set FSIS_DIRECTORY_URL  --body "$BASE/fsis_mpi_directory.csv"
+   gh variable set FSIS_SUPPLEMENT_URL --body "$BASE/fsis_mpi_supplement.csv"
+   gh variable set FSIS_DIRECTORY_SHA256  --body "$(sha256sum data/raw/fsis_mpi_directory.csv | cut -d' ' -f1)"
+   gh variable set FSIS_SUPPLEMENT_SHA256 --body "$(sha256sum data/raw/fsis_mpi_supplement.csv | cut -d' ' -f1)"
+   ```
+
+5. Record the retrieval date and checksums in `DATA_SOURCES.md`, then rerun the workflow.
+
+The pipeline runs as named stages (`ingest/run_pipeline.py`). It writes
+`build/manifest.json` with each stage's title, status, duration, and output checksums.
+The manifest never records commands, arguments, or environment values, so the API key
+cannot reach the published page. `ingest/build_page.py` turns the report and manifest into
+`site/index.html`, with the report and run summary in expandable sections above the map.
+
+Run the same build locally with `uv run ingest/run_pipeline.py`, after setting the
+environment variables above.
+
 ## Repository layout
 
 - `migrations/`: numbered SQL files, applied in order by `migrate.sh`. Applied files are
   never edited; changes go in a new numbered file.
-- `ingest/`: Python loading and export scripts. Python is used for loading only; all
-  analysis is in SQL.
+- `ingest/`: Python loading, export, and page-building scripts. Python is used for loading
+  and presentation only; all analysis is in SQL.
+- `.github/workflows/`: the automated build and GitHub Pages deploy.
 - `tests/`: pytest tests (synthetic data only) and validation SQL for the real data.
-- `map/`: static MapLibre page and the GeoJSON it reads.
+- `map/`: static MapLibre page, its favicon, and the data files it reads.
+- `assets/make_favicon.py`: draws the cow favicon (`uv run --with pillow python assets/make_favicon.py`).
 - `data/`: raw and staging files. Git-ignored.
 - `DATA_SOURCES.md`: source, vintage, licence, and checksum for every dataset.
 - `LIMITATIONS.md`: what the data can and cannot show, and every judgement call made.

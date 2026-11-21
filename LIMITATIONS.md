@@ -112,6 +112,29 @@ disease to any facility, or identify outbreak zones.
   locations are harder to judge precisely. This is intentional: it reduces the chance of
   reading facility locations from street-level detail.
 
+## History (Census County Business Patterns)
+- **A different measure from FSIS.** The history counts employer establishments in the
+  slaughter industry: cattle, hogs, sheep, and game, inspected or not. It excludes
+  businesses with no employees. It is never joined to or compared with the FSIS counts,
+  and the map shows it as a separate view.
+- **Break in 1998.** The industry code changed from SIC 2011 to NAICS 311611. The Texas
+  count rose by 50 establishments that year because of the definition, not new plants.
+  The chart draws the two periods as separate lines, and years should be compared only
+  within one period.
+- **County detail ends in 2016.** From 2017 Census no longer publishes most small county
+  counts. Statewide totals continue to 2023 and appear in the chart only.
+- **No row means zero, for these years only.** It holds because the county rows sum
+  exactly to the state total in every year from 1986 to 2016, which the loader checks on
+  every run. It would not hold for 2017 onwards.
+- **No county cattle for 1988 to 1992.** NASS published no Texas county estimates in those
+  years, so the map shows establishments without cattle.
+- **Ratio at state level only.** Most counties have no slaughter establishment in any year,
+  so a county ratio of cattle per establishment is undefined for most of the map. The ratio
+  is shown for Texas as a whole.
+- **Establishments, not capacity.** A count says nothing about plant size or throughput.
+  Fewer establishments alongside steady cattle numbers can mean consolidation into larger
+  plants, but this data cannot show that.
+
 ## Units
 - **Miles throughout.** Distances and radii are in miles. The 10 and 25 mile rings are
   larger than the 10 and 25 km rings used before (16 and 40 km), so counts are higher than

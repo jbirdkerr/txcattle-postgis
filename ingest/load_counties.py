@@ -95,8 +95,11 @@ def validate(rows: list[dict], expected: int = EXPECTED_TX_COUNTIES) -> None:
 
 
 def load(rows: list[dict], dsn: str) -> None:
+    # Upsert rather than delete-and-insert: cattle and facility rows reference
+    # tx_county, so clearing the table would fail on any rerun against a loaded
+    # database. A county that is no longer in the file is still deleted, and that
+    # delete fails loudly if other data still references it.
     with psycopg.connect(dsn) as conn, conn.cursor() as cur:
-        cur.execute("DELETE FROM tx_county")
         cur.executemany(
             """
             INSERT INTO tx_county (
@@ -109,9 +112,19 @@ def load(rows: list[dict], dsn: str) -> None:
                 ST_GeomFromText(%(wkt)s, 4269),
                 ST_SetSRID(ST_MakePoint(%(lon)s, %(lat)s), 4326)::geography
             )
+            ON CONFLICT (geoid) DO UPDATE SET
+                county_fips   = EXCLUDED.county_fips,
+                name          = EXCLUDED.name,
+                name_long     = EXCLUDED.name_long,
+                land_area_m2  = EXCLUDED.land_area_m2,
+                water_area_m2 = EXCLUDED.water_area_m2,
+                geom          = EXCLUDED.geom,
+                internal_pt   = EXCLUDED.internal_pt
             """,
             rows,
         )
+        cur.execute("DELETE FROM tx_county WHERE NOT (geoid = ANY(%s))",
+                    ([r["geoid"] for r in rows],))
         cur.execute("SELECT count(*) FROM tx_county")
         (count,) = cur.fetchone()
     print(f"load    {count} rows in tx_county")

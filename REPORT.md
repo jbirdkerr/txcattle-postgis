@@ -1,6 +1,6 @@
 # Texas Cattle Slaughter Capacity by County: Summary
 
-*Generated 2026-11-03 from the project database. Descriptive only:
+*Generated 2026-11-21 from the project database. Descriptive only:
 these results show where facilities and reported cattle are located. They do not
 show causes, do not attribute any disease to any facility, and do not identify outbreak zones.*
 
@@ -17,13 +17,13 @@ Milk cow counts are published for few counties. Coverage by year:
 
 | Year | Source | Published | Suppressed | No row |
 |---|---|---|---|---|
-| 2,021 | SURVEY | 33 | 60 | 161 |
-| 2,022 | CENSUS | 38 | 89 | 127 |
-| 2,022 | SURVEY | 33 | 61 | 160 |
-| 2,023 | SURVEY | 27 | 101 | 126 |
-| 2,024 | SURVEY | 27 | 74 | 153 |
-| 2,025 | SURVEY | 27 | 74 | 153 |
-| 2,026 | SURVEY | 27 | 74 | 153 |
+| 2021 | SURVEY | 33 | 60 | 161 |
+| 2022 | CENSUS | 38 | 89 | 127 |
+| 2022 | SURVEY | 33 | 61 | 160 |
+| 2023 | SURVEY | 27 | 101 | 126 |
+| 2024 | SURVEY | 27 | 74 | 153 |
+| 2025 | SURVEY | 27 | 74 | 153 |
+| 2026 | SURVEY | 27 | 74 | 153 |
 
 Any dairy result rests on this sample. Counts are withheld where NASS suppresses them
 and where NASS published no row, which is not treated as zero.
@@ -80,6 +80,34 @@ Two separate rankings. They measure different things and should not be combined.
 
 Distances are from the county boundary: 0 means a plant is inside the county.
 
+## History of slaughter establishments
+
+A separate, longer series from Census County Business Patterns: employer establishments
+in the slaughter industry (all livestock except poultry, inspected or not). This is a
+different measure from the FSIS plant counts above, and the two are not compared.
+
+| Year | Industry code | Establishments | All cattle, Jan 1 (head) | Cattle per establishment |
+|---|---|---|---|---|
+| 1986 | SIC 2011 | 123 | 13,600,000 | 110,569 |
+| 1990 | SIC 2011 | 109 | 12,900,000 | 118,349 |
+| 1995 | SIC 2011 | 102 | 15,100,000 | 148,039 |
+| 1997 | SIC 2011 | 103 | 14,300,000 | 138,835 |
+| 1998 | NAICS 311611 | 153 | 14,500,000 | 94,771 |
+| 2000 | NAICS 311611 | 145 | 13,900,000 | 95,862 |
+| 2005 | NAICS 311611 | 118 | 13,600,000 | 115,254 |
+| 2010 | NAICS 311611 | 99 | 13,300,000 | 134,343 |
+| 2015 | NAICS 311611 | 103 | 11,700,000 | 113,592 |
+| 2016 | NAICS 311611 | 99 | 11,800,000 | 119,192 |
+| 2020 | NAICS 311611 | 91 | 12,900,000 | 141,758 |
+| 2023 | NAICS 311611 | 79 | 12,500,000 | 158,228 |
+
+The industry code changed from SIC 2011 to NAICS 311611 in 1998, which changed the count by
++50 establishments in one year. Compare years only within one code system. Counties with
+at least one establishment: 99 in 1998 and
+72 in 2016. County detail on the map covers
+1986 to 2016; from 2017 Census no longer publishes most small
+county counts, so later years are statewide only.
+
 ## Limitations
 
 See `LIMITATIONS.md`. The most important points for reading this summary:
@@ -89,3 +117,4 @@ See `LIMITATIONS.md`. The most important points for reading this summary:
 - Inventories are modelled county estimates, not counts.
 - Dairy results rest on the small milk cow sample shown above.
 - Clusters are descriptive groupings with arbitrary labels.
+- The history series counts a broader set of establishments than FSIS and breaks in 1998.

@@ -81,3 +81,25 @@ def test_internal_points_fall_inside_their_county(loaded):
                WHERE NOT ST_Covers(geom, ST_Transform(internal_pt::geometry, 4269))"""
         ).fetchone()[0]
     assert bad == 0
+
+
+def test_reload_keeps_referencing_rows(loaded):
+    """A second load must not fail when other tables reference the counties."""
+    geoid = loaded[0]["geoid"]
+    with psycopg.connect(TEST_DSN, autocommit=True) as conn:
+        conn.execute("CREATE TABLE ref_test (geoid char(5) REFERENCES tx_county(geoid))")
+        try:
+            conn.execute("INSERT INTO ref_test VALUES (%s)", (geoid,))
+            lc.load(loaded, TEST_DSN)
+            (n,) = conn.execute("SELECT count(*) FROM tx_county").fetchone()
+            assert n == len(loaded)
+            # A county dropped from the file is deleted, unless something references it.
+            unreferenced = [r for r in loaded if r["geoid"] != loaded[-1]["geoid"]]
+            lc.load(unreferenced, TEST_DSN)
+            (n,) = conn.execute("SELECT count(*) FROM tx_county").fetchone()
+            assert n == len(loaded) - 1
+            with pytest.raises(psycopg.errors.ForeignKeyViolation):
+                lc.load(loaded[1:], TEST_DSN)
+        finally:
+            conn.execute("DROP TABLE ref_test")
+            lc.load(loaded, TEST_DSN)
